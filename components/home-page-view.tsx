@@ -22,10 +22,9 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import {
-  RATING_PROVIDER_OPTIONS,
-  type RatingPreference,
-} from '@/lib/ratingPreferences';
+import type { RatingPreference } from '@/lib/ratingPreferences';
+import type { RatingProviderRow } from '@/lib/ratingRows';
+import { RatingProviderSortableList } from '@/components/rating-provider-sortable-list';
 import {
   BACKDROP_RATING_LAYOUT_OPTIONS,
   type BackdropRatingLayout,
@@ -89,7 +88,7 @@ type HomePageViewDerived = {
   providersLabel: string;
   activeRatingStyle: RatingStyle;
   activeImageText: 'original' | 'clean' | 'alternative';
-  activeRatingPreferences: RatingPreference[];
+  ratingProviderRows: RatingProviderRow[];
   shouldShowQualityBadgesPosition: boolean;
   shouldShowQualityBadgesSide: boolean;
   qualityBadgeTypeLabel: string;
@@ -119,6 +118,7 @@ type HomePageViewActions = {
   setActiveStreamBadges: Dispatch<SetStateAction<StreamBadgesSetting>>;
   setActiveQualityBadgesStyle: Dispatch<SetStateAction<RatingStyle>>;
   toggleRatingPreference: (rating: RatingPreference) => void;
+  reorderRatingPreference: (fromIndex: number, toIndex: number) => void;
   updateProxyManifestUrl: (value: string) => void;
   toggleProxyEnabledType: (type: PreviewType) => void;
   toggleProxyTranslateMeta: () => void;
@@ -135,7 +135,6 @@ export type HomePageViewProps = {
   actions: HomePageViewActions;
 };
 
-const VISIBLE_RATING_PROVIDER_OPTIONS = RATING_PROVIDER_OPTIONS;
 const PROXY_TYPES: PreviewType[] = ['poster', 'backdrop', 'logo'];
 const STREAM_BADGE_OPTIONS: Array<{ id: StreamBadgesSetting; label: string }> = [
   { id: 'auto', label: 'Auto' },
@@ -194,7 +193,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     providersLabel,
     activeRatingStyle,
     activeImageText,
-    activeRatingPreferences,
+    ratingProviderRows,
     shouldShowQualityBadgesPosition,
     shouldShowQualityBadgesSide,
     qualityBadgeTypeLabel,
@@ -223,6 +222,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     setActiveStreamBadges,
     setActiveQualityBadgesStyle,
     toggleRatingPreference,
+    reorderRatingPreference,
     updateProxyManifestUrl,
     toggleProxyEnabledType,
     toggleProxyTranslateMeta,
@@ -567,15 +567,14 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                 )}
 
                 <div className="rounded-xl border border-white/10 bg-[#0b0f15]/80 p-2.5 space-y-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 block">{providersLabel}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {VISIBLE_RATING_PROVIDER_OPTIONS.map(provider => (
-                      <label key={provider.id} className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] cursor-pointer select-none transition-colors ${activeRatingPreferences.includes(provider.id as RatingPreference) ? 'border-orange-500/60 bg-[#141b26] text-white' : 'border-white/10 bg-[#0b0f15] text-slate-400 hover:text-white'}`}>
-                        <input type="checkbox" checked={activeRatingPreferences.includes(provider.id as RatingPreference)} onChange={() => toggleRatingPreference(provider.id as RatingPreference)} className="h-3 w-3 accent-orange-500" />
-                        <span>{provider.label}</span>
-                      </label>
-                    ))}
-                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 block">
+                    {providersLabel} — drag the grip to reorder (left → right / top → bottom)
+                  </span>
+                  <RatingProviderSortableList
+                    rows={ratingProviderRows}
+                    onReorder={reorderRatingPreference}
+                    onToggle={toggleRatingPreference}
+                  />
                 </div>
               </div>
 

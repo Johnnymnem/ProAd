@@ -17,6 +17,12 @@ import {
   type RatingPreference,
 } from '@/lib/ratingPreferences';
 import {
+  buildDefaultRatingRows,
+  enabledOrderedToRows,
+  rowsToEnabledOrdered,
+  type RatingProviderRow,
+} from '@/lib/ratingRows';
+import {
   BACKDROP_RATING_LAYOUT_OPTIONS,
   DEFAULT_BACKDROP_RATING_LAYOUT,
   type BackdropRatingLayout,
@@ -47,9 +53,6 @@ const SUPPORTED_LANGUAGES = [
   { code: 'tr', label: 'T\u00fcrk\u00e7e', flag: '\uD83C\uDDF9\uD83C\uDDF7' },
 ];
 const VISIBLE_RATING_PROVIDER_OPTIONS = RATING_PROVIDER_OPTIONS;
-const DEFAULT_RATING_PREFERENCES: RatingPreference[] = RATING_PROVIDER_OPTIONS.map(
-  (provider) => provider.id
-);
 const PROXY_TYPES = ['poster', 'backdrop', 'logo'] as const;
 type ProxyType = (typeof PROXY_TYPES)[number];
 type ProxyEnabledTypes = Record<ProxyType, boolean>;
@@ -190,15 +193,13 @@ export default function Home() {
   const [lang, setLang] = useState('en');
   const [posterImageText, setPosterImageText] = useState<'original' | 'clean' | 'alternative'>('clean');
   const [backdropImageText, setBackdropImageText] = useState<'original' | 'clean' | 'alternative'>('clean');
-  const [posterRatingPreferences, setPosterRatingPreferences] = useState<RatingPreference[]>(
-    DEFAULT_RATING_PREFERENCES
-  );
-  const [backdropRatingPreferences, setBackdropRatingPreferences] = useState<RatingPreference[]>(
-    DEFAULT_RATING_PREFERENCES
-  );
-  const [logoRatingPreferences, setLogoRatingPreferences] = useState<RatingPreference[]>(
-    DEFAULT_RATING_PREFERENCES
-  );
+  const [posterRatingRows, setPosterRatingRows] = useState<RatingProviderRow[]>(buildDefaultRatingRows);
+  const [backdropRatingRows, setBackdropRatingRows] = useState<RatingProviderRow[]>(buildDefaultRatingRows);
+  const [logoRatingRows, setLogoRatingRows] = useState<RatingProviderRow[]>(buildDefaultRatingRows);
+
+  const posterRatingPreferences = useMemo(() => rowsToEnabledOrdered(posterRatingRows), [posterRatingRows]);
+  const backdropRatingPreferences = useMemo(() => rowsToEnabledOrdered(backdropRatingRows), [backdropRatingRows]);
+  const logoRatingPreferences = useMemo(() => rowsToEnabledOrdered(logoRatingRows), [logoRatingRows]);
   const [posterStreamBadges, setPosterStreamBadges] = useState<StreamBadgesSetting>('auto');
   const [backdropStreamBadges, setBackdropStreamBadges] = useState<StreamBadgesSetting>('auto');
   const [qualityBadgesSide, setQualityBadgesSide] = useState<QualityBadgesSide>('left');
@@ -704,27 +705,43 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
     baseUrl,
   ]);
 
-  const updateRatingPreferencesForType = (
+  const updateRatingRowsForType = (
     type: 'poster' | 'backdrop' | 'logo',
-    updater: (current: RatingPreference[]) => RatingPreference[]
+    updater: (current: RatingProviderRow[]) => RatingProviderRow[]
   ) => {
     if (type === 'poster') {
-      setPosterRatingPreferences(updater);
+      setPosterRatingRows(updater);
       return;
     }
     if (type === 'backdrop') {
-      setBackdropRatingPreferences(updater);
+      setBackdropRatingRows(updater);
       return;
     }
-    setLogoRatingPreferences(updater);
+    setLogoRatingRows(updater);
   };
 
   const toggleRatingPreference = (rating: RatingPreference) => {
-    updateRatingPreferencesForType(previewType, (current) =>
-      current.includes(rating)
-        ? current.filter((item) => item !== rating)
-        : [...current, rating]
+    updateRatingRowsForType(previewType, (rows) =>
+      rows.map((r) => (r.id === rating ? { ...r, enabled: !r.enabled } : r))
     );
+  };
+
+  const reorderRatingPreference = (fromIndex: number, toIndex: number) => {
+    updateRatingRowsForType(previewType, (rows) => {
+      if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= rows.length ||
+        toIndex >= rows.length
+      ) {
+        return rows;
+      }
+      const copy = [...rows];
+      const [item] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, item);
+      return copy;
+    });
   };
 
   const toggleProxyEnabledType = (type: ProxyType) => {
@@ -879,21 +896,21 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       resolveRatingPreferences(payload.posterRatingPreferences, payload.posterRatings) ??
       resolveRatingPreferences(null, payload.ratings);
     if (posterRatings !== null) {
-      setPosterRatingPreferences(posterRatings);
+      setPosterRatingRows(enabledOrderedToRows(posterRatings));
     }
 
     const backdropRatings =
       resolveRatingPreferences(payload.backdropRatingPreferences, payload.backdropRatings) ??
       resolveRatingPreferences(null, payload.ratings);
     if (backdropRatings !== null) {
-      setBackdropRatingPreferences(backdropRatings);
+      setBackdropRatingRows(enabledOrderedToRows(backdropRatings));
     }
 
     const logoRatings =
       resolveRatingPreferences(payload.logoRatingPreferences, payload.logoRatings) ??
       resolveRatingPreferences(null, payload.ratings);
     if (logoRatings !== null) {
-      setLogoRatingPreferences(logoRatings);
+      setLogoRatingRows(enabledOrderedToRows(logoRatings));
     }
 
     if (typeof payload.proxyManifestUrl === 'string') {
@@ -978,12 +995,12 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       : previewType === 'backdrop'
         ? 'Backdrop Providers'
         : 'Logo Providers';
-  const activeRatingPreferences =
+  const ratingProviderRows =
     previewType === 'poster'
-      ? posterRatingPreferences
+      ? posterRatingRows
       : previewType === 'backdrop'
-        ? backdropRatingPreferences
-        : logoRatingPreferences;
+        ? backdropRatingRows
+        : logoRatingRows;
 
   const setRatingStyleForType = (value: RatingStyle) => {
     if (previewType === 'poster') {
@@ -1046,7 +1063,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       providersLabel,
       activeRatingStyle,
       activeImageText,
-      activeRatingPreferences,
+      ratingProviderRows,
       shouldShowQualityBadgesPosition,
       shouldShowQualityBadgesSide,
       qualityBadgeTypeLabel,
@@ -1075,6 +1092,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       setActiveStreamBadges,
       setActiveQualityBadgesStyle,
       toggleRatingPreference,
+      reorderRatingPreference,
       updateProxyManifestUrl: (value) => setProxyManifestUrl(normalizeManifestUrl(value, true)),
       toggleProxyEnabledType,
       toggleProxyTranslateMeta: () => setProxyTranslateMeta((value) => !value),
