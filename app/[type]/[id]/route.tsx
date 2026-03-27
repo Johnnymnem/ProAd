@@ -159,7 +159,7 @@ const SIMKL_CACHE_TTL_MS = parseCacheTtlMs(
   10 * 60 * 1000,
   30 * 24 * 60 * 60 * 1000
 );
-const TORRENTIO_CACHE_TTL_MS = parseCacheTtlMs(
+const STREAM_BADGES_CACHE_TTL_MS = parseCacheTtlMs(
   process.env.ERDB_TORRENTIO_CACHE_TTL_MS,
   6 * 60 * 60 * 1000,
   10 * 60 * 1000,
@@ -214,10 +214,10 @@ type CachedJsonNetworkObserver = {
     durationMs: number;
   }) => Promise<void> | void;
 };
-type TorrentioBadgeCache = {
+type StreamBadgesCache = {
   flags: StreamQualityFlags;
 };
-type TorrentioBadgeResult = {
+type StreamBadgesResult = {
   badges: RatingBadge[];
   cacheTtlMs: number;
 };
@@ -247,7 +247,7 @@ const finalImageInFlight = new Map<string, Promise<RenderedImagePayload>>();
 const sourceImageInFlight = new Map<string, Promise<RenderedImagePayload>>();
 const metadataInFlight = new Map<string, Promise<CachedJsonResponse>>();
 const providerIconInFlight = new Map<string, Promise<string | null>>();
-const torrentioInFlight = new Map<string, Promise<TorrentioBadgeResult>>();
+const streamBadgesInFlight = new Map<string, Promise<StreamBadgesResult>>();
 const mdbListRateLimitedUntil = new Map<string, number>();
 let mdbListApiKeyCursor = 0;
 const sha1Hex = (value: string) => createHash('sha1').update(value).digest('hex');
@@ -584,28 +584,28 @@ const buildStreamBadgesFromFlags = (flags: StreamQualityFlags): RatingBadge[] =>
 const buildTorrentioUrl = (type: 'movie' | 'series', id: string) =>
   `${STREAM_BADGES_PROVIDER_BASE_URL}/stream/${type}/${encodeURIComponent(id)}.json`;
 
-const fetchTorrentioBadges = async (input: {
+const fetchStreamBadges = async (input: {
   type: 'movie' | 'series';
   id: string;
   phases: PhaseDurations;
   cacheTtlMs?: number;
-}): Promise<TorrentioBadgeResult> => {
+}): Promise<StreamBadgesResult> => {
   const trimmedId = input.id.trim();
   if (!trimmedId) {
-    return { badges: [], cacheTtlMs: TORRENTIO_CACHE_TTL_MS };
+    return { badges: [], cacheTtlMs: STREAM_BADGES_CACHE_TTL_MS };
   }
-  const cacheKey = `torrentio:${input.type}:${trimmedId}`;
+  const cacheKey = `streambadges:${input.type}:${trimmedId}`;
   const ttlMs =
     typeof input.cacheTtlMs === 'number' && Number.isFinite(input.cacheTtlMs) && input.cacheTtlMs > 0
       ? input.cacheTtlMs
-      : getDeterministicTtlMs(TORRENTIO_CACHE_TTL_MS, cacheKey);
-  const cached = getMetadata<TorrentioBadgeCache>(cacheKey);
+      : getDeterministicTtlMs(STREAM_BADGES_CACHE_TTL_MS, cacheKey);
+  const cached = getMetadata<StreamBadgesCache>(cacheKey);
   if (cached) {
     return { badges: buildStreamBadgesFromFlags(cached.flags), cacheTtlMs: ttlMs };
   }
 
-  return withDedupe(torrentioInFlight, cacheKey, async () => {
-    const warm = getMetadata<TorrentioBadgeCache>(cacheKey);
+  return withDedupe(streamBadgesInFlight, cacheKey, async () => {
+    const warm = getMetadata<StreamBadgesCache>(cacheKey);
     if (warm) {
       return { badges: buildStreamBadgesFromFlags(warm.flags), cacheTtlMs: ttlMs };
     }
@@ -3809,14 +3809,14 @@ export async function GET(
     (streamBadgesSetting === 'on' || streamBadgesSetting === 'auto') &&
     !hasNativeAnimeInput;
   const streamBadgesSeedTtlMs = shouldApplyStreamBadges
-    ? getDeterministicTtlMs(TORRENTIO_CACHE_TTL_MS, cleanId)
+    ? getDeterministicTtlMs(STREAM_BADGES_CACHE_TTL_MS, cleanId)
     : null;
   const streamBadgesSeedWindow =
     shouldApplyStreamBadges && streamBadgesSeedTtlMs
       ? Math.floor(Date.now() / streamBadgesSeedTtlMs)
       : null;
   const streamBadgesCacheKeySeed = shouldApplyStreamBadges
-    ? `torrentio:${streamBadgesSeedWindow ?? 0}`
+    ? `streambadges:${streamBadgesSeedWindow ?? 0}`
     : 'off';
   const shouldCacheFinalImage =
     shouldApplyRatings || shouldApplyStreamBadges || (imageType === 'poster' && posterTextPreference === 'clean');
@@ -4155,17 +4155,17 @@ export async function GET(
             id: torrentioIdForCache,
             mediaType: mediaType as 'movie' | 'tv',
             releaseDate: releaseDateForCache,
-            defaultTtlMs: TORRENTIO_CACHE_TTL_MS,
+            defaultTtlMs: STREAM_BADGES_CACHE_TTL_MS,
             oldTtlMs: MDBLIST_OLD_MOVIE_CACHE_TTL_MS,
           })
-          : getDeterministicTtlMs(TORRENTIO_CACHE_TTL_MS, cleanId)
+          : getDeterministicTtlMs(STREAM_BADGES_CACHE_TTL_MS, cleanId)
         : null;
       const streamBadgesCacheWindow =
         shouldRenderStreamBadges && streamBadgesWindowTtlMs
           ? Math.floor(Date.now() / streamBadgesWindowTtlMs)
           : null;
       const streamBadgesCacheKey = shouldRenderStreamBadges
-        ? `torrentio:${streamBadgesCacheWindow ?? 0}`
+        ? `streambadges:${streamBadgesCacheWindow ?? 0}`
         : 'off';
       const finalImageCacheKey = [
         FINAL_IMAGE_RENDERER_CACHE_VERSION,
@@ -4888,17 +4888,17 @@ export async function GET(
                   : null;
             const torrentioId = imdbId || (tmdbId ? `tmdb:${tmdbId}` : null);
             if (!torrentioId) {
-              return { badges: [], cacheTtlMs: TORRENTIO_CACHE_TTL_MS };
+              return { badges: [], cacheTtlMs: STREAM_BADGES_CACHE_TTL_MS };
             }
             const torrentioType = mediaType === 'movie' ? 'movie' : 'series';
             const torrentioCacheTtlMs = getRatingCacheTtlMs({
               id: torrentioId,
               mediaType: mediaType as 'movie' | 'tv',
               releaseDate: mediaType === 'movie' ? media?.release_date : media?.first_air_date,
-              defaultTtlMs: TORRENTIO_CACHE_TTL_MS,
+              defaultTtlMs: STREAM_BADGES_CACHE_TTL_MS,
               oldTtlMs: MDBLIST_OLD_MOVIE_CACHE_TTL_MS,
             });
-            return fetchTorrentioBadges({ type: torrentioType, id: torrentioId, phases, cacheTtlMs: torrentioCacheTtlMs });
+            return fetchStreamBadges({ type: torrentioType, id: torrentioId, phases, cacheTtlMs: torrentioCacheTtlMs });
           })()
           : null;
 
@@ -5617,7 +5617,7 @@ export async function GET(
           }
           return renderedRatingTtlByProvider.get(badge.key) || null;
         }),
-        ...(streamBadges.length > 0 ? [streamBadgesCacheTtlMs ?? TORRENTIO_CACHE_TTL_MS] : []),
+        ...(streamBadges.length > 0 ? [streamBadgesCacheTtlMs ?? STREAM_BADGES_CACHE_TTL_MS] : []),
       ].filter((ttlMs): ttlMs is number => typeof ttlMs === 'number' && Number.isFinite(ttlMs) && ttlMs > 0);
       const finalImageCacheTtlMs =
         renderedRatingCacheTtlCandidates.length > 0
