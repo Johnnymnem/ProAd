@@ -83,6 +83,7 @@ type HomePageViewState = {
   proxyCopied: boolean;
   copied: boolean;
   aiometadataCopiedType: AiometadataPatternType | null;
+  aiometadataUsesTvdb: boolean;
 };
 
 type HomePageViewDerived = {
@@ -129,6 +130,7 @@ type HomePageViewActions = {
   setBackdropRatingsLayout: Dispatch<SetStateAction<BackdropRatingLayout>>;
   setThumbnailRatingsLayout: Dispatch<SetStateAction<ThumbnailRatingLayout>>;
   setThumbnailSize: Dispatch<SetStateAction<ThumbnailSize>>;
+  setAiometadataUsesTvdb: Dispatch<SetStateAction<boolean>>;
   setPosterQualityBadgesPosition: Dispatch<SetStateAction<PosterQualityBadgesPosition>>;
   setQualityBadgesSide: Dispatch<SetStateAction<QualityBadgesSide>>;
   setRatingStyleForType: (value: RatingStyle) => void;
@@ -171,6 +173,10 @@ const POSTER_QUALITY_BADGE_POSITION_OPTIONS: Array<{
   { id: 'left', label: 'Left' },
   { id: 'right', label: 'Right' },
 ];
+const AIOMETADATA_TVDB_OPTIONS: Array<{ value: boolean; label: string }> = [
+  { value: false, label: 'No' },
+  { value: true, label: 'Yes' },
+];
 
 export function HomePageView({ refs, state, derived, actions }: HomePageViewProps) {
   const { navRef } = refs;
@@ -199,6 +205,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     proxyCopied,
     copied,
     aiometadataCopiedType,
+    aiometadataUsesTvdb,
   } = state;
   const {
     baseUrl,
@@ -243,6 +250,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     setBackdropRatingsLayout,
     setThumbnailRatingsLayout,
     setThumbnailSize,
+    setAiometadataUsesTvdb,
     setPosterQualityBadgesPosition,
     setQualityBadgesSide,
     setRatingStyleForType,
@@ -845,7 +853,21 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                 <Terminal className="w-5 h-5 text-orange-500" /> Aiometadata Patterns
               </h3>
             </div>
-            <p className="mt-2 text-sm text-slate-400 max-w-3xl">Copy these URL patterns directly into aiometadata. Use TMDB IDs in the form `tmdb:{'{type}'}:{'{tmdb_id}'}` and `tmdb:{'{type}'}:{'{tmdb_id}'}:{'{season}'}:{'{episode}'}` for episode thumbnails.</p>
+            <p className="mt-2 text-sm text-slate-400 max-w-3xl">If AiOMetadata does not use TVDB, ERDB will generate a `tmdb:` thumbnail pattern. If it does use TVDB, answer yes and use the same setting for anime too if you want consistent thumbnails. For anime, AiOMetadata may send a Kitsu ID in the season slot when TVDB mapping fails, so TVDB thumbnails can be incorrect.</p>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-[#080b10]/90 p-3">
+              <div className="text-[11px] font-semibold text-slate-400">Does AiOMetadata use TVDB for series?</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {AIOMETADATA_TVDB_OPTIONS.map((option) => (
+                  <button
+                    key={String(option.value)}
+                    onClick={() => setAiometadataUsesTvdb(option.value)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${aiometadataUsesTvdb === option.value ? 'border-orange-500/60 bg-[#141b26] text-white' : 'border-white/10 bg-[#0b0f15] text-slate-400 hover:text-white'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-3">
               {([
                 ['poster', 'Poster URL Pattern'],

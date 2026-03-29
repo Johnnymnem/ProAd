@@ -198,6 +198,11 @@ type CachedJsonResponse = {
   status: number;
   data: any;
 };
+type CachedTextResponse = {
+  ok: boolean;
+  status: number;
+  data: string | null;
+};
 type CachedJsonNetworkObserver = {
   onNetworkResponse?: (input: {
     key: string;
@@ -1524,6 +1529,124 @@ const fetchJsonCached = async (
 
     return payload;
   });
+};
+
+const fetchTextCached = async (
+  key: string,
+  url: string,
+  ttlMs: number,
+  phases: PhaseDurations,
+  phase: keyof PhaseDurations,
+  init?: RequestInit
+): Promise<CachedTextResponse> => {
+  const cached = getMetadata<CachedTextResponse>(key);
+  if (cached) {
+    return cached;
+  }
+
+  return withDedupe(metadataInFlight, key, async () => {
+    const fromCache = getMetadata<CachedTextResponse>(key);
+    if (fromCache) return fromCache;
+
+    const response = await measurePhase(phases, phase, () =>
+      fetch(url, {
+        cache: 'no-store',
+        redirect: 'follow',
+        ...init,
+      })
+    );
+
+    let data: string | null = null;
+    try {
+      data = await response.text();
+    } catch {
+      data = null;
+    }
+
+    const payload: CachedTextResponse = {
+      ok: response.ok,
+      status: response.status,
+      data,
+    };
+    const failureTtlMs = Math.min(ttlMs, 2 * 60 * 1000);
+    setMetadata(key, payload, response.ok ? ttlMs : failureTtlMs);
+    return payload;
+  });
+};
+
+const extractTvdbEpisodeIdFromAiredOrderHtml = (
+  html: string,
+  seriesPageUrl: string,
+  season: string,
+  episode: string
+) => {
+  const seasonNumber = parseInt(season, 10);
+  const episodeNumber = parseInt(episode, 10);
+  if (!Number.isFinite(seasonNumber) || !Number.isFinite(episodeNumber)) return null;
+
+  const escapedSeriesSlug = seriesPageUrl
+    .replace(/^https?:\/\/thetvdb\.com/i, '')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const episodeCode = `S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
+  const matcher = new RegExp(
+    `${episodeCode}[\\s\\S]{0,1200}?href="${escapedSeriesSlug}/episodes/(\\d+)"`,
+    'i'
+  );
+  return html.match(matcher)?.[1] || null;
+};
+
+const resolveTvdbEpisodeToTmdb = async (
+  seriesId: string,
+  season: string,
+  episode: string,
+  tmdbKey: string,
+  phases: PhaseDurations
+) => {
+  const seriesUrl = `https://thetvdb.com/dereferrer/series/${encodeURIComponent(seriesId)}`;
+  const seriesPageUrl = await measurePhase(phases, 'tmdb', async () => {
+    const response = await fetch(seriesUrl, { cache: 'no-store', redirect: 'follow' });
+    return response.ok ? response.url : null;
+  }).catch(() => null);
+  if (!seriesPageUrl) return null;
+
+  const airedOrderUrl = `${seriesPageUrl.replace(/\/+$/, '')}/allseasons/official`;
+  const airedOrderResponse = await fetchTextCached(
+    `tvdb:series:${seriesId}:aired-order`,
+    airedOrderUrl,
+    TMDB_CACHE_TTL_MS,
+    phases,
+    'tmdb'
+  );
+  if (!airedOrderResponse.ok || !airedOrderResponse.data) return null;
+
+  const tvdbEpisodeId = extractTvdbEpisodeIdFromAiredOrderHtml(
+    airedOrderResponse.data,
+    seriesPageUrl,
+    season,
+    episode
+  );
+  if (!tvdbEpisodeId) return null;
+
+  const findResponse = await fetchJsonCached(
+    `tmdb:find:tvdb-episode:${tvdbEpisodeId}`,
+    `https://api.themoviedb.org/3/find/${tvdbEpisodeId}?api_key=${tmdbKey}&external_source=tvdb_id`,
+    TMDB_CACHE_TTL_MS,
+    phases,
+    'tmdb'
+  );
+  const episodeResult = Array.isArray(findResponse.data?.tv_episode_results)
+    ? findResponse.data.tv_episode_results[0]
+    : null;
+  const showId = Number(episodeResult?.show_id);
+  const seasonNumber = Number(episodeResult?.season_number);
+  const episodeNumber = Number(episodeResult?.episode_number);
+  if (!Number.isFinite(showId)) return null;
+
+  return {
+    showId: String(showId),
+    season: Number.isFinite(seasonNumber) ? String(seasonNumber) : null,
+    episode: Number.isFinite(episodeNumber) ? String(episodeNumber) : null,
+  };
 };
 
 const normalizeImageLanguage = (value?: string | null) => {
@@ -3872,6 +3995,8 @@ export async function GET(
   let season: string | null = null;
   let episode: string | null = null;
   let isTmdb = false;
+  let isTvdb = false;
+  let tvdbSeriesId: string | null = null;
   let isKitsu = false;
   let explicitTmdbMediaType: 'movie' | 'tv' | null = null;
   const hasNativeAnimeInput = ANIME_NATIVE_INPUT_ID_PREFIX_SET.has(idPrefix);
@@ -3894,6 +4019,12 @@ export async function GET(
       season = parts.length > 2 ? parts[2] : null;
       episode = parts.length > 3 ? parts[3] : null;
     }
+  } else if (idPrefix === 'tvdb') {
+    isTvdb = true;
+    mediaId = parts[1];
+    tvdbSeriesId = parts[1] || null;
+    season = parts.length > 2 ? parts[2] : null;
+    episode = parts.length > 3 ? parts[3] : null;
   } else if (idPrefix === 'kitsu') {
     isKitsu = true;
     mediaId = parts[1];
@@ -4038,6 +4169,34 @@ export async function GET(
               mediaType = 'tv';
             }
           }
+        }
+      } else if (isTvdb) {
+        if (!mediaId) {
+          throw new HttpError('TVDB series ID is required', 400);
+        }
+
+        if (season && episode) {
+          const mappedEpisode = await resolveTvdbEpisodeToTmdb(mediaId, season, episode, tmdbKey, phases);
+          if (!mappedEpisode?.showId) {
+            throw new HttpError('TVDB aired-order episode not found on TMDB', 404);
+          }
+          mediaId = mappedEpisode.showId;
+          season = mappedEpisode.season;
+          episode = mappedEpisode.episode;
+        }
+
+        const tvFindResponse = await fetchJsonCached(
+          `tmdb:find:tvdb-series:${tvdbSeriesId}`,
+          `https://api.themoviedb.org/3/find/${tvdbSeriesId}?api_key=${tmdbKey}&external_source=tvdb_id`,
+          TMDB_CACHE_TTL_MS,
+          phases,
+          'tmdb'
+        );
+        const tvFindData = tvFindResponse.data || {};
+        const tvResult = tvFindData.tv_results?.[0] || null;
+        if (tvResult) {
+          media = tvResult;
+          mediaType = 'tv';
         }
       } else if (isKitsu) {
         let mappingUrl = `https://animemapping.stremio.dpdns.org/kitsu/${mediaId}`;

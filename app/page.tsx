@@ -329,6 +329,7 @@ const buildAiometadataPatternBlock = (options: {
   baseUrl: string;
   imageType: 'poster' | 'backdrop' | 'logo' | 'thumbnail';
   configString: string;
+  idPattern?: string;
 }) => {
   if (!options.baseUrl || !options.configString) {
     return '';
@@ -425,12 +426,16 @@ const buildAiometadataPatternBlock = (options: {
     .join('&');
 
   const idPattern =
-    options.imageType === 'thumbnail'
+    options.idPattern ||
+    (options.imageType === 'thumbnail'
       ? 'tmdb:{type}:{tmdb_id}:{season}:{episode}'
-      : 'tmdb:{type}:{tmdb_id}';
+      : 'tmdb:{type}:{tmdb_id}');
   const basePattern = `${options.baseUrl}/${options.imageType}/${idPattern}.jpg`;
   return query ? `${basePattern}?${query}` : basePattern;
 };
+
+const buildEpisodeThumbnailIdPattern = (usesTvdb: boolean) =>
+  usesTvdb ? 'tvdb:{tvdb_id}:{season}:{episode}' : 'tmdb:tv:{tmdb_id}:{season}:{episode}';
 
 const downloadJsonFile = (payload: Record<string, unknown>, filename: string) => {
   if (typeof window === 'undefined') return;
@@ -500,6 +505,7 @@ export default function Home() {
   const [showConfigString, setShowConfigString] = useState(false);
   const [showProxyUrl, setShowProxyUrl] = useState(false);
   const [aiometadataCopiedType, setAiometadataCopiedType] = useState<AiometadataPatternType | null>(null);
+  const [aiometadataUsesTvdb, setAiometadataUsesTvdb] = useState(false);
   const [exportStatus, setExportStatus] = useState<'idle' | 'with' | 'without'>('idle');
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMessage, setImportMessage] = useState('');
@@ -1087,6 +1093,13 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
   ]);
 
   const aiometadataPatterns = useMemo(() => {
+    const episodePattern = buildAiometadataPatternBlock({
+      baseUrl,
+      imageType: 'thumbnail',
+      configString,
+      idPattern: buildEpisodeThumbnailIdPattern(aiometadataUsesTvdb),
+    });
+
     return {
       poster: buildAiometadataPatternBlock({
         baseUrl,
@@ -1103,15 +1116,12 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
         imageType: 'logo',
         configString,
       }),
-      episodeThumbnail: buildAiometadataPatternBlock({
-        baseUrl,
-        imageType: 'thumbnail',
-        configString,
-      }),
+      episodeThumbnail: episodePattern,
     };
   }, [
     baseUrl,
     configString,
+    aiometadataUsesTvdb,
   ]);
 
   const updateRatingRowsForType = (
@@ -1241,6 +1251,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       posterRatingsMaxPerSide,
       backdropRatingsLayout,
       thumbnailRatingsLayout,
+      aiometadataUsesTvdb,
       proxyManifestUrl,
       proxyEnabledTypes,
       translateMeta: proxyTranslateMeta,
@@ -1324,6 +1335,9 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
     }
     if (typeof payload.thumbnailSize === 'string' && THUMBNAIL_SIZE_OPTIONS.some((option) => option.id === payload.thumbnailSize)) {
       setThumbnailSize(payload.thumbnailSize as ThumbnailSize);
+    }
+    if (typeof payload.aiometadataUsesTvdb === 'boolean') {
+      setAiometadataUsesTvdb(payload.aiometadataUsesTvdb);
     }
 
     if (payload.posterRatingsMaxPerSide === null) {
@@ -1429,6 +1443,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       backdropRatingsLayout,
       thumbnailRatingsLayout,
       thumbnailSize,
+      aiometadataUsesTvdb,
       proxyManifestUrl,
       proxyEnabledTypes,
       translateMeta: proxyTranslateMeta,
@@ -1458,6 +1473,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
     backdropRatingsLayout,
     thumbnailRatingsLayout,
     thumbnailSize,
+    aiometadataUsesTvdb,
     proxyManifestUrl,
     proxyEnabledTypes,
     proxyTranslateMeta,
@@ -1608,6 +1624,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       proxyCopied,
       copied,
       aiometadataCopiedType,
+      aiometadataUsesTvdb,
     },
     derived: {
       baseUrl,
@@ -1652,6 +1669,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       setBackdropRatingsLayout,
       setThumbnailRatingsLayout,
       setThumbnailSize,
+      setAiometadataUsesTvdb,
       setPosterQualityBadgesPosition,
       setQualityBadgesSide,
       setRatingStyleForType,

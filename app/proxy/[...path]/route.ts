@@ -21,6 +21,7 @@ const corsHeaders = {
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const tmdbFetchCache = new Map<string, Promise<any>>();
+const textFetchCache = new Map<string, Promise<string | null>>();
 
 const fetchTmdbJson = async (url: string) => {
   const cached = tmdbFetchCache.get(url);
@@ -37,6 +38,53 @@ const fetchTmdbJson = async (url: string) => {
     .catch(() => null);
   tmdbFetchCache.set(url, promise);
   return promise;
+};
+
+const fetchText = async (url: string) => {
+  const cached = textFetchCache.get(url);
+  if (cached) return cached;
+  const promise = fetch(url, { cache: 'no-store', redirect: 'follow' })
+    .then(async (response) => {
+      if (!response.ok) return null;
+      try {
+        return await response.text();
+      } catch {
+        return null;
+      }
+    })
+    .catch(() => null);
+  textFetchCache.set(url, promise);
+  return promise;
+};
+
+const extractTvdbEpisodeIdFromAiredOrder = async (
+  seriesId: string,
+  season: string,
+  episode: string,
+) => {
+  const seasonNumber = parseInt(season, 10);
+  const episodeNumber = parseInt(episode, 10);
+  if (!Number.isFinite(seasonNumber) || !Number.isFinite(episodeNumber)) return null;
+
+  const seriesUrl = `https://thetvdb.com/dereferrer/series/${encodeURIComponent(seriesId)}`;
+  const seriesResponse = await fetch(seriesUrl, { cache: 'no-store', redirect: 'follow' }).catch(() => null);
+  const seriesPageUrl = seriesResponse?.url;
+  if (!seriesPageUrl) return null;
+
+  const airedOrderUrl = `${seriesPageUrl.replace(/\/+$/, '')}/allseasons/official`;
+  const html = await fetchText(airedOrderUrl);
+  if (!html) return null;
+
+  const escapedSeriesSlug = seriesPageUrl
+    .replace(/^https?:\/\/thetvdb\.com/i, '')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const episodeCode = `S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
+  const matcher = new RegExp(
+    `${episodeCode}[\\s\\S]{0,1200}?href="${escapedSeriesSlug}/episodes/(\\d+)"`,
+    'i'
+  );
+  const match = html.match(matcher);
+  return match?.[1] || null;
 };
 
 const normalizeStremioType = (value: unknown): 'movie' | 'tv' | null => {
@@ -144,6 +192,52 @@ const resolveTmdbFromErdbId = async (
     }
     if (tvResults[0]?.id) {
       return { id: Number(tvResults[0].id), type: 'tv' };
+    }
+  }
+
+  if (erdbId.startsWith('tvdb:')) {
+    const parts = erdbId.split(':');
+    const seriesId = parts[1];
+    const season = parts[2];
+    const episode = parts[3];
+    if (!seriesId) return null;
+
+    if (season && episode) {
+      const tvdbEpisodeId = await extractTvdbEpisodeIdFromAiredOrder(seriesId, season, episode);
+      if (!tvdbEpisodeId) return null;
+
+      const findUrl = new URL(`${TMDB_BASE_URL}/find/${encodeURIComponent(tvdbEpisodeId)}`);
+      findUrl.searchParams.set('api_key', tmdbKey);
+      findUrl.searchParams.set('external_source', 'tvdb_id');
+      if (lang) {
+        findUrl.searchParams.set('language', lang);
+      }
+
+      const data = await fetchTmdbJson(findUrl.toString());
+      const episodeResult = Array.isArray(data?.tv_episode_results) ? data.tv_episode_results[0] : null;
+      const showId = Number(episodeResult?.show_id);
+      const resolvedSeason = Number(episodeResult?.season_number);
+      if (Number.isFinite(showId)) {
+        return {
+          id: showId,
+          type: 'tv',
+          season: Number.isFinite(resolvedSeason) ? resolvedSeason : null,
+        };
+      }
+      return null;
+    }
+
+    const findUrl = new URL(`${TMDB_BASE_URL}/find/${encodeURIComponent(seriesId)}`);
+    findUrl.searchParams.set('api_key', tmdbKey);
+    findUrl.searchParams.set('external_source', 'tvdb_id');
+    if (lang) {
+      findUrl.searchParams.set('language', lang);
+    }
+    const data = await fetchTmdbJson(findUrl.toString());
+    const tvResult = Array.isArray(data?.tv_results) ? data.tv_results[0] : null;
+    const id = Number(tvResult?.id);
+    if (Number.isFinite(id)) {
+      return { id, type: 'tv' };
     }
   }
 
