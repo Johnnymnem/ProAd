@@ -55,6 +55,7 @@ type QualityBadgesSide = 'left' | 'right';
 type PosterQualityBadgesPosition = 'auto' | QualityBadgesSide;
 type AiometadataPatternType = 'poster' | 'background' | 'logo' | 'episodeThumbnail';
 type AiometadataEpisodeProvider = 'tvdb' | 'realimdb';
+type ProxySeriesMetadataProvider = 'tmdb' | 'imdb';
 type ProxyEpisodeProvider = 'custom' | 'realimdb';
 type VerticalBadgeContent = 'standard' | 'stacked';
 
@@ -74,6 +75,7 @@ type HomePageViewState = {
   proxyDiscoverOnlyCatalogs: Record<string, boolean>;
   proxyCatalogsStatus: 'idle' | 'loading' | 'ready' | 'error';
   proxyCatalogsError: string;
+  proxySeriesMetadataProvider: ProxySeriesMetadataProvider;
   proxyAiometadataProvider: ProxyEpisodeProvider;
   proxyEnabledTypes: ProxyEnabledTypes;
   proxyTranslateMeta: boolean;
@@ -148,6 +150,7 @@ type HomePageViewActions = {
   setThumbnailVerticalBadgeContent: Dispatch<SetStateAction<VerticalBadgeContent>>;
   setThumbnailSize: Dispatch<SetStateAction<ThumbnailSize>>;
   setAiometadataEpisodeProvider: Dispatch<SetStateAction<AiometadataEpisodeProvider>>;
+  setProxySeriesMetadataProvider: Dispatch<SetStateAction<ProxySeriesMetadataProvider>>;
   setProxyAiometadataProvider: Dispatch<SetStateAction<ProxyEpisodeProvider>>;
   setPosterQualityBadgesPosition: Dispatch<SetStateAction<PosterQualityBadgesPosition>>;
   setQualityBadgesSide: Dispatch<SetStateAction<QualityBadgesSide>>;
@@ -205,10 +208,21 @@ const AIOMETADATA_EPISODE_PROVIDER_OPTIONS: Array<{ id: AiometadataEpisodeProvid
   { id: 'realimdb', label: 'IMDb' },
   { id: 'tvdb', label: 'TVDB' },
 ];
+const PROXY_SERIES_METADATA_PROVIDER_OPTIONS: Array<{ id: ProxySeriesMetadataProvider; label: string }> = [
+  { id: 'tmdb', label: 'TMDB' },
+  { id: 'imdb', label: 'IMDb' },
+];
 const PROXY_EPISODE_PROVIDER_OPTIONS: Array<{ id: ProxyEpisodeProvider; label: string }> = [
   { id: 'realimdb', label: 'IMDb' },
   { id: 'custom', label: 'Custom' },
 ];
+const isCinemetaManifestUrl = (value: string) => {
+  try {
+    return /(^|[-.])cinemeta\.strem\.io$/i.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
 
 export function HomePageView({ refs, state, derived, actions }: HomePageViewProps) {
   const { navRef } = refs;
@@ -228,6 +242,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     proxyDiscoverOnlyCatalogs,
     proxyCatalogsStatus,
     proxyCatalogsError,
+    proxySeriesMetadataProvider,
     proxyAiometadataProvider,
     proxyEnabledTypes,
     proxyTranslateMeta,
@@ -300,6 +315,7 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
     setThumbnailVerticalBadgeContent,
     setThumbnailSize,
     setAiometadataEpisodeProvider,
+    setProxySeriesMetadataProvider,
     setProxyAiometadataProvider,
     setPosterQualityBadgesPosition,
     setQualityBadgesSide,
@@ -328,6 +344,8 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
   const activeVerticalBadgeContent =
     previewType === 'poster' ? posterVerticalBadgeContent : previewType === 'thumbnail' ? thumbnailVerticalBadgeContent : backdropVerticalBadgeContent;
   const normalizedProxyManifestUrl = proxyManifestUrl.trim().toLowerCase();
+  const isAiometadataProxyManifest = normalizedProxyManifestUrl.includes('aiometadata');
+  const isCinemetaProxyManifest = isCinemetaManifestUrl(proxyManifestUrl.trim());
   const canConfigureCatalogs =
     Boolean(normalizedProxyManifestUrl) &&
     normalizedProxyManifestUrl !== 'http://' &&
@@ -958,7 +976,32 @@ export function HomePageView({ refs, state, derived, actions }: HomePageViewProp
                       </p>
                     </div>
                   )}
-                  {proxyManifestUrl.toLowerCase().includes('aiometadata') && (
+                  {canConfigureCatalogs && isCinemetaProxyManifest && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-slate-500">Cinemeta uses IMDb IDs for series automatically, so ERDB will use <span className="text-slate-300 font-medium">`realimdb:`</span> for episode thumbnails without asking for a provider selection.</p>
+                    </div>
+                  )}
+                  {canConfigureCatalogs && !isAiometadataProxyManifest && !isCinemetaProxyManifest && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-slate-500">Select <span className="text-slate-300 font-medium">IMDb</span> if the addon uses IMDb `tt...` IDs for series. ERDB will rewrite those TV IDs to <span className="text-slate-300 font-medium">`realimdb:`</span> so series artwork and episode thumbnails resolve correctly. Select <span className="text-slate-300 font-medium">TMDB</span> to keep the addon series IDs unchanged.</p>
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 block mb-1.5">Series Metadata Provider</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {PROXY_SERIES_METADATA_PROVIDER_OPTIONS.map((option) => (
+                            <button
+                              key={`proxy-series-provider-${option.id}`}
+                              type="button"
+                              onClick={() => setProxySeriesMetadataProvider(option.id)}
+                              className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors ${proxySeriesMetadataProvider === option.id ? 'border-orange-500/60 bg-[#141b26] text-white' : 'border-white/10 bg-[#0b0f15] text-slate-400 hover:text-white'}`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {isAiometadataProxyManifest && (
                     <div className="space-y-2">
                       <p className="text-[11px] text-slate-500">The proxy cannot reliably distinguish AIOMetadata series from anime in every case, so use the same provider for both. Select <span className="text-slate-300 font-medium">IMDb</span> if AIOMetadata uses IMDb as the meta provider for both series and anime, so ERDB can upgrade `tt...` IDs to `realimdb:`. If AIOMetadata uses TVDB internally but still forces IMDb `tt...` IDs in its output, the proxy cannot detect that and cannot convert those IDs to `tvdb:` automatically. Select <span className="text-slate-300 font-medium">Custom</span> to keep the addon IDs exactly as they are.</p>
                       <div>

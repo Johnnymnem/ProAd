@@ -61,6 +61,7 @@ export const ERDB_RESERVED_PARAMS = new Set<string>([
   'mdblistKey',
   'simklClientId',
   'erdbBase',
+  'seriesMetadataProvider',
   'translateMeta',
   'posterEnabled',
   'backdropEnabled',
@@ -115,6 +116,7 @@ export type ProxyConfig = {
   backdropVerticalBadgeContent?: string;
   thumbnailVerticalBadgeContent?: string;
   thumbnailSize?: string;
+  seriesMetadataProvider?: string;
   aiometadataProvider?: string;
   erdbBase?: string;
   posterEnabled?: boolean;
@@ -158,6 +160,7 @@ const PROXY_OPTIONAL_STRING_KEYS = [
   'backdropVerticalBadgeContent',
   'thumbnailVerticalBadgeContent',
   'thumbnailSize',
+  'seriesMetadataProvider',
   'aiometadataProvider',
   'erdbBase',
  ] as const satisfies readonly (keyof ProxyConfig)[];

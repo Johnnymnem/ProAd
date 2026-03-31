@@ -78,6 +78,7 @@ type PreviewType = (typeof PREVIEW_TYPES)[number];
 type ProxyEnabledTypes = Record<ProxyType, boolean>;
 type AiometadataPatternType = 'poster' | 'background' | 'logo' | 'episodeThumbnail';
 type AiometadataEpisodeProvider = 'tvdb' | 'realimdb';
+type ProxySeriesMetadataProvider = 'tmdb' | 'imdb';
 type ProxyEpisodeProvider = 'custom' | 'realimdb';
 type StreamBadgesSetting = 'auto' | 'on' | 'off';
 type QualityBadgesSide = 'left' | 'right';
@@ -131,6 +132,8 @@ const isBackdropRatingLayout = (value: unknown): value is BackdropRatingLayout =
   BACKDROP_RATING_LAYOUT_OPTIONS.some((option) => option.id === value);
 const isThumbnailRatingLayout = (value: unknown): value is ThumbnailRatingLayout =>
   THUMBNAIL_RATING_LAYOUT_OPTIONS.some((option) => option.id === value);
+const isProxySeriesMetadataProvider = (value: unknown): value is ProxySeriesMetadataProvider =>
+  value === 'tmdb' || value === 'imdb';
 const isProxyEpisodeProvider = (value: unknown): value is ProxyEpisodeProvider =>
   value === 'custom' || value === 'realimdb';
 const isAiometadataEpisodeProvider = (value: unknown): value is AiometadataEpisodeProvider =>
@@ -157,6 +160,13 @@ const normalizeManifestUrl = (value: string, allowBareScheme = false) => {
 };
 
 const isBareHttpUrl = (value: string) => value === 'http://' || value === 'https://';
+const isCinemetaManifestUrl = (value: string) => {
+  try {
+    return /(^|[-.])cinemeta\.strem\.io$/i.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
 
 const safeLocalStorageGet = (key: string) => {
   if (typeof window === 'undefined') return null;
@@ -526,6 +536,8 @@ export default function Home() {
   const [tmdbKey, setTmdbKey] = useState('');
   const [simklClientId, setSimklClientId] = useState('');
   const [proxyManifestUrl, setProxyManifestUrl] = useState('');
+  const [proxySeriesMetadataProvider, setProxySeriesMetadataProvider] =
+    useState<ProxySeriesMetadataProvider>('tmdb');
   const [proxyAiometadataProvider, setProxyAiometadataProvider] = useState<ProxyEpisodeProvider>('custom');
   const [proxyEnabledTypes, setProxyEnabledTypes] = useState<ProxyEnabledTypes>({
     poster: true,
@@ -1229,6 +1241,8 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
     if (!manifestUrl || isBareHttpUrl(manifestUrl) || !tmdb || !mdb) {
       return '';
     }
+    const isAiometadataManifest = manifestUrl.toLowerCase().includes('aiometadata');
+    const isCinemetaManifest = isCinemetaManifestUrl(manifestUrl);
 
     const config: Record<string, unknown> = {
       url: manifestUrl,
@@ -1332,8 +1346,10 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
     ) {
       config.thumbnailVerticalBadgeContent = thumbnailVerticalBadgeContent;
     }
-    if (manifestUrl.toLowerCase().includes('aiometadata')) {
+    if (isAiometadataManifest) {
       config.aiometadataProvider = proxyAiometadataProvider;
+    } else if (!isCinemetaManifest && proxySeriesMetadataProvider === 'imdb') {
+      config.seriesMetadataProvider = proxySeriesMetadataProvider;
     }
 
     config.erdbBase = baseUrl;
@@ -1370,6 +1386,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
     backdropVerticalBadgeContent,
     thumbnailVerticalBadgeContent,
     thumbnailSize,
+    proxySeriesMetadataProvider,
     proxyAiometadataProvider,
     proxyEnabledTypes,
     proxyTranslateMeta,
@@ -1544,6 +1561,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       thumbnailVerticalBadgeContent,
       thumbnailSize,
       aiometadataEpisodeProvider,
+      proxySeriesMetadataProvider,
       proxyAiometadataProvider,
       proxyManifestUrl,
       proxyEnabledTypes,
@@ -1718,6 +1736,9 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       setProxyCatalogsStatus('idle');
       setProxyCatalogsError('');
     }
+    if (isProxySeriesMetadataProvider(payload.proxySeriesMetadataProvider)) {
+      setProxySeriesMetadataProvider(payload.proxySeriesMetadataProvider);
+    }
     if (isProxyEpisodeProvider(payload.proxyAiometadataProvider)) {
       setProxyAiometadataProvider(payload.proxyAiometadataProvider);
     }
@@ -1817,6 +1838,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       thumbnailVerticalBadgeContent,
       thumbnailSize,
       aiometadataEpisodeProvider,
+      proxySeriesMetadataProvider,
       proxyAiometadataProvider,
       proxyManifestUrl,
       proxyEnabledTypes,
@@ -1855,6 +1877,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
     thumbnailVerticalBadgeContent,
     thumbnailSize,
     aiometadataEpisodeProvider,
+    proxySeriesMetadataProvider,
     proxyAiometadataProvider,
     proxyManifestUrl,
     proxyEnabledTypes,
@@ -2021,6 +2044,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       copied,
       aiometadataCopiedType,
       aiometadataEpisodeProvider,
+      proxySeriesMetadataProvider,
       proxyAiometadataProvider,
     },
     derived: {
@@ -2073,6 +2097,7 @@ Skip any params that are undefined. Keep empty ratings/posterRatings/backdropRat
       setThumbnailVerticalBadgeContent,
       setThumbnailSize,
       setAiometadataEpisodeProvider,
+      setProxySeriesMetadataProvider,
       setProxyAiometadataProvider,
       setPosterQualityBadgesPosition,
       setQualityBadgesSide,

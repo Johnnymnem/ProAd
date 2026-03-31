@@ -529,13 +529,17 @@ const isAnimeMeta = (meta: Record<string, unknown>, rawType: string | null, rawI
   return genres.some((genre) => typeof genre === 'string' && genre.trim().toLowerCase() === 'anime');
 };
 
-const applyConfiguredEpisodeProvider = (
+const applyConfiguredSeriesProvider = (
   normalized: string,
+  normalizedType: 'movie' | 'tv' | null,
   provider: string | undefined
 ) => {
+  if (normalizedType !== 'tv') return normalized;
   if (!provider) return normalized;
   if (provider === 'custom') return normalized;
-  if (provider === 'realimdb' && /^tt\d+$/i.test(normalized)) return `realimdb:${normalized}`;
+  if ((provider === 'realimdb' || provider === 'imdb') && /^tt\d+$/i.test(normalized)) {
+    return `realimdb:${normalized}`;
+  }
   return normalized;
 };
 
@@ -546,15 +550,24 @@ const normalizeProxyErdbId = (
   meta?: Record<string, unknown>,
   requestedType?: string | null
 ) => {
-  const normalized = normalizeErdbId(rawId, rawType);
+  const normalizedType = normalizeStremioType(rawType) || normalizeStremioType(requestedType);
+  const normalized = normalizeErdbId(rawId, normalizedType || rawType || requestedType);
   if (!normalized) return null;
-  const normalizedType = normalizeStremioType(rawType);
   if (isAiometadataManifestUrl(config.url)) {
     if (normalizedType === 'movie') {
       return normalized;
     }
     const provider = config.aiometadataProvider;
-    return applyConfiguredEpisodeProvider(normalized, provider);
+    return applyConfiguredSeriesProvider(normalized, normalizedType, provider);
+  }
+
+  const configuredSeriesId = applyConfiguredSeriesProvider(
+    normalized,
+    normalizedType,
+    config.seriesMetadataProvider
+  );
+  if (configuredSeriesId !== normalized) {
+    return configuredSeriesId;
   }
   if (!isCinemetaManifestUrl(config.url)) return normalized;
 
