@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - package.json
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -40,19 +39,18 @@ jobs:
       - name: Detect version bump
         id: version_check
         env:
-          EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
         shell: bash
         run: |
           current_version=$(node -p "require('./package.json').version")
           previous_version=""
 
-          if [[ "$EVENT_NAME" != "workflow_dispatch" ]] && [[ -n "$BEFORE_SHA" ]] && git cat-file -e "${BEFORE_SHA}:package.json" 2>/dev/null; then
+          if [[ -n "$BEFORE_SHA" ]] && git cat-file -e "${BEFORE_SHA}:package.json" 2>/dev/null; then
             previous_version=$(git show "${BEFORE_SHA}:package.json" | node -e "let data=''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => process.stdout.write(JSON.parse(data).version || ''));")
           fi
 
           should_release="true"
-          if [[ "$EVENT_NAME" != "workflow_dispatch" ]] && [[ "$current_version" == "$previous_version" ]]; then
+          if [[ "$current_version" == "$previous_version" ]]; then
             should_release="false"
           fi
 
