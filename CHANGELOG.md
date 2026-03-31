@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.23](https://github.com/realbestia1/erdb/compare/v0.1.22...v0.1.23) - 2026-03-31
+
+- Bump to v0.1.23 and refine logo badge rendering ([0b41bf0](https://github.com/realbestia1/erdb/commit/0b41bf0e243d44db83574b18e1c60014c49a3a6f))
+- Update release-from-package.yml ([7926f81](https://github.com/realbestia1/erdb/commit/7926f81823d4f31e39ccafaa063aa94dc00941ff))
+
 ## [0.1.22](https://github.com/realbestia1/erdb/compare/v0.1.21...v0.1.22) - 2026-03-31
 
 - refine logo rating rendering ([28c1c2c](https://github.com/realbestia1/erdb/commit/28c1c2c18705d8d72c7c5fbd6f8e4255afcdf921))
