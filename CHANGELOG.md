@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.12](https://github.com/realbestia1/erdb/compare/v0.2.11...v0.2.12) - 2026-04-02
+
+- Bump version to 0.2.12 and normalize path split ([65e7701](https://github.com/realbestia1/erdb/commit/65e77012f9ea256c6bdc5b1d51c77c1c831f8479))
+  Update package.json version to 0.2.12 and update the HomePage currentVersion string accordingly. Improve getFilePath by splitting keys on both forward and backslashes (/ and \) before sanitizing segments to handle Windows and mixed-path separators correctly.
+
 ## [0.2.11](https://github.com/realbestia1/erdb/compare/v0.2.10...v0.2.11) - 2026-04-02
 
 - Add thumbnail rating style and bump version ([8581d4f](https://github.com/realbestia1/erdb/commit/8581d4f2613cb0518cc0c88a82895372d8c4aba8))
