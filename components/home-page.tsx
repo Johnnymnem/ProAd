@@ -130,6 +130,7 @@ const POSTER_QUALITY_BADGE_POSITION_OPTIONS: Array<{
 const TMDB_KEY_STORAGE_KEY = 'erdb_tmdb_key';
 const MDBLIST_KEY_STORAGE_KEY = 'erdb_mdblist_key';
 const SIMKL_CLIENT_ID_STORAGE_KEY = 'erdb_simkl_client_id';
+const ERDB_TOKEN_STORAGE_KEY = 'erdb_active_token';
 const PREVIEW_CONFIG_STORAGE_KEY = 'erdb_preview_config';
 const EXPORT_CONFIG_VERSION = 1;
 const TMDB_LANGUAGE_DOC_EXAMPLES = 'TMDB language code (en, es-ES, es-MX, pt-PT, pt-BR, etc.)';
@@ -323,6 +324,7 @@ const EMPTY_ENABLED_RATING_QUERY_KEYS = new Set([
 
 const buildAiometadataPattern = (options: {
   baseUrl: string;
+  activeToken: string | null;
   imageType: 'poster' | 'backdrop' | 'logo' | 'thumbnail';
   idPlaceholder: string;
   tmdbKey: string;
@@ -364,6 +366,7 @@ const buildAiometadataPattern = (options: {
 }) => {
   const {
     baseUrl,
+    activeToken,
     imageType,
     idPlaceholder,
     tmdbKey,
@@ -404,7 +407,15 @@ const buildAiometadataPattern = (options: {
     thumbnailSize,
   } = options;
 
-  if (!baseUrl || !tmdbKey || !mdblistKey) {
+  if (!baseUrl) {
+    return '';
+  }
+
+  if (activeToken) {
+    return `${baseUrl}/${activeToken}/${imageType}/${idPlaceholder}.jpg`;
+  }
+
+  if (!tmdbKey || !mdblistKey) {
     return '';
   }
 
@@ -488,11 +499,20 @@ const buildAiometadataPattern = (options: {
 
 const buildAiometadataPatternBlock = (options: {
   baseUrl: string;
+  activeToken: string | null;
   imageType: 'poster' | 'backdrop' | 'logo' | 'thumbnail';
   configString: string;
   idPattern?: string;
 }) => {
-  if (!options.baseUrl || !options.configString) {
+  if (!options.baseUrl) {
+    return '';
+  }
+
+  if (options.activeToken) {
+    return `${options.baseUrl}/${options.activeToken}/${options.imageType}/${options.idPattern || '{imdb_id}'}.jpg`;
+  }
+
+  if (!options.configString) {
     return '';
   }
 
@@ -635,7 +655,15 @@ const downloadJsonFile = (payload: Record<string, unknown>, filename: string) =>
 
 const maskSensitiveText = (value: string) => value.replace(/[^\s]/g, '*');
 
-export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) {
+export default function HomePage({
+  mode = 'landing',
+  initialToken = null,
+  initialConfig = null,
+}: {
+  mode?: HomePageMode;
+  initialToken?: string | null;
+  initialConfig?: Record<string, unknown> | null;
+}) {
   const [previewType, setPreviewType] = useState<PreviewType>('poster');
   const [mediaId, setMediaId] = useState(DEFAULT_SERIES_ID);
   const [lang, setLang] = useState('en');
@@ -707,17 +735,18 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
   const [proxyCatalogsStatus, setProxyCatalogsStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [proxyCatalogsError, setProxyCatalogsError] = useState('');
   const [proxyCopied, setProxyCopied] = useState(false);
-  const [configCopied, setConfigCopied] = useState(false);
-  const [showConfigString, setShowConfigString] = useState(false);
   const [showProxyUrl, setShowProxyUrl] = useState(false);
   const [aiometadataCopiedType, setAiometadataCopiedType] = useState<AiometadataPatternType | null>(null);
   const [aiometadataEpisodeProvider, setAiometadataEpisodeProvider] = useState<AiometadataEpisodeProvider>('realimdb');
-  const [currentVersion, setCurrentVersion] = useState('0.2.12');
+  const [currentVersion, setCurrentVersion] = useState('0.3.0');
   const [githubPackageVersion, setGithubPackageVersion] = useState<string | null>(null);
   const [repoUrl, setRepoUrl] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<'idle' | 'with' | 'without'>('idle');
   const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [importMessage, setImportMessage] = useState('');
+
+  const [activeToken, setActiveToken] = useState<string | null>(initialToken);
+  const [configSaveStatus, setConfigSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const navRef = useRef<HTMLElement | null>(null);
   const baseUrl = normalizeBaseUrl(useClientOrigin());
   const hasTmdbKey = tmdbKey.length > 10;
@@ -799,7 +828,8 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
     const storedTmdbKey = safeLocalStorageGet(TMDB_KEY_STORAGE_KEY);
     const storedMdblistKey = safeLocalStorageGet(MDBLIST_KEY_STORAGE_KEY);
     const storedSimklClientId = safeLocalStorageGet(SIMKL_CLIENT_ID_STORAGE_KEY);
-    if (!storedTmdbKey && !storedMdblistKey && !storedSimklClientId) {
+    const storedToken = safeLocalStorageGet(ERDB_TOKEN_STORAGE_KEY);
+    if (!storedTmdbKey && !storedMdblistKey && !storedSimklClientId && !storedToken) {
       return;
     }
     const frameId = window.requestAnimationFrame(() => {
@@ -812,9 +842,20 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
       if (storedSimklClientId) {
         setSimklClientId(storedSimklClientId);
       }
+      if (!initialToken && storedToken) {
+        setActiveToken(storedToken);
+      }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, []);
+  }, [initialToken]);
+
+  useEffect(() => {
+    if (activeToken) {
+      safeLocalStorageSet(ERDB_TOKEN_STORAGE_KEY, activeToken);
+    } else {
+      safeLocalStorageRemove(ERDB_TOKEN_STORAGE_KEY);
+    }
+  }, [activeToken]);
 
   useEffect(() => {
     if (tmdbKey) {
@@ -1494,6 +1535,12 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
     }
 
     config.erdbBase = baseUrl;
+
+    if (activeToken) {
+      const encodedManifestUrl = encodeBase64Url(String(config.url));
+      return `${baseUrl}/proxy/${activeToken}/${encodedManifestUrl}/manifest.json`;
+    }
+
     const encoded = encodeBase64Url(JSON.stringify(config));
     return `${baseUrl}/proxy/${encoded}/manifest.json`;
   }, [
@@ -1543,11 +1590,13 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
     sanitizedProxyDiscoverOnlyCatalogs,
     baseUrl,
     thumbnailRatingStyle,
+    activeToken,
   ]);
 
   const aiometadataPatterns = useMemo(() => {
     const episodePattern = buildAiometadataPatternBlock({
       baseUrl,
+      activeToken,
       imageType: 'thumbnail',
       configString,
       idPattern: buildEpisodeThumbnailIdPattern(aiometadataEpisodeProvider),
@@ -1556,18 +1605,21 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
     return {
       poster: buildAiometadataPatternBlock({
         baseUrl,
+        activeToken,
         imageType: 'poster',
         configString,
         idPattern: '{imdb_id}',
       }),
       background: buildAiometadataPatternBlock({
         baseUrl,
+        activeToken,
         imageType: 'backdrop',
         configString,
         idPattern: '{imdb_id}',
       }),
       logo: buildAiometadataPatternBlock({
         baseUrl,
+        activeToken,
         imageType: 'logo',
         configString,
         idPattern: '{imdb_id}',
@@ -1576,6 +1628,7 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
     };
   }, [
     baseUrl,
+    activeToken,
     configString,
     aiometadataEpisodeProvider,
   ]);
@@ -1666,13 +1719,6 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
       [type]: !current[type],
     }));
   };
-
-  const handleCopyConfig = useCallback(() => {
-    if (!configString) return;
-    navigator.clipboard.writeText(configString);
-    setConfigCopied(true);
-    setTimeout(() => setConfigCopied(false), 2000);
-  }, [configString]);
 
   const handleCopyProxy = useCallback(() => {
     if (!proxyUrl) return;
@@ -2019,6 +2065,16 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
   }, []);
 
   useEffect(() => {
+    if (!initialConfig) {
+      return;
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      applyImportedConfig(initialConfig);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [initialConfig]);
+
+  useEffect(() => {
     const payload: Record<string, unknown> = {
       version: EXPORT_CONFIG_VERSION,
       previewType,
@@ -2148,7 +2204,136 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
     applyImportedConfig(payload);
   };
 
-  const canGenerateConfig = Boolean(configString);
+  const currentConfigPayload = useMemo(
+    () => ({
+      version: EXPORT_CONFIG_VERSION,
+      lang: effectiveLang,
+      posterImageText,
+      backdropImageText,
+      posterRatingPreferences,
+      backdropRatingPreferences,
+      thumbnailRatingPreferences,
+      logoRatingPreferences,
+      posterStreamBadges,
+      backdropStreamBadges,
+      qualityBadgesSide,
+      posterQualityBadgesPosition,
+      posterQualityBadgesStyle,
+      backdropQualityBadgesStyle,
+      posterRatingStyle,
+      backdropRatingStyle,
+      logoRatingStyle,
+      logoMode,
+      logoFontVariant,
+      logoCustomPrimary,
+      logoCustomSecondary,
+      logoCustomOutline,
+      posterRatingsLayout,
+      posterRatingsMaxPerSide,
+      logoRatingsMax,
+      backdropRatingsLayout,
+      thumbnailRatingsLayout,
+      posterVerticalBadgeContent,
+      backdropVerticalBadgeContent,
+      thumbnailVerticalBadgeContent,
+      thumbnailSize,
+      aiometadataEpisodeProvider,
+      proxySeriesMetadataProvider,
+      proxyAiometadataProvider,
+      proxyManifestUrl,
+      proxyEnabledTypes,
+      translateMeta: proxyTranslateMeta,
+      proxyCatalogNames: sanitizedProxyCatalogNames,
+      proxyHiddenCatalogs: sanitizedProxyHiddenCatalogs,
+      proxySearchDisabledCatalogs: sanitizedProxySearchDisabledCatalogs,
+      proxyDiscoverOnlyCatalogs: sanitizedProxyDiscoverOnlyCatalogs,
+      tmdbKey,
+      mdblistKey,
+      simklClientId,
+    }),
+    [
+      effectiveLang,
+      posterImageText,
+      backdropImageText,
+      posterRatingPreferences,
+      backdropRatingPreferences,
+      thumbnailRatingPreferences,
+      logoRatingPreferences,
+      posterStreamBadges,
+      backdropStreamBadges,
+      qualityBadgesSide,
+      posterQualityBadgesPosition,
+      posterQualityBadgesStyle,
+      backdropQualityBadgesStyle,
+      posterRatingStyle,
+      backdropRatingStyle,
+      logoRatingStyle,
+      logoMode,
+      logoFontVariant,
+      logoCustomPrimary,
+      logoCustomSecondary,
+      logoCustomOutline,
+      posterRatingsLayout,
+      posterRatingsMaxPerSide,
+      logoRatingsMax,
+      backdropRatingsLayout,
+      thumbnailRatingsLayout,
+      posterVerticalBadgeContent,
+      backdropVerticalBadgeContent,
+      thumbnailVerticalBadgeContent,
+      thumbnailSize,
+      aiometadataEpisodeProvider,
+      proxySeriesMetadataProvider,
+      proxyAiometadataProvider,
+      proxyManifestUrl,
+      proxyEnabledTypes,
+      proxyTranslateMeta,
+      sanitizedProxyCatalogNames,
+      sanitizedProxyHiddenCatalogs,
+      sanitizedProxySearchDisabledCatalogs,
+      sanitizedProxyDiscoverOnlyCatalogs,
+      tmdbKey,
+      mdblistKey,
+      simklClientId,
+    ]
+  );
+
+  const handleTokenDisconnect = () => {
+    setActiveToken(null);
+    void fetch('/api/workspace-auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    }).finally(() => {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/configurator';
+      }
+    });
+  };
+
+  const handleSaveConfig = useCallback(() => {
+    if (typeof window === 'undefined' || mode !== 'workspace' || !activeToken) {
+      return;
+    }
+
+    setConfigSaveStatus('saving');
+    void fetch('/api/workspace-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: currentConfigPayload }),
+    })
+      .then((response) => {
+        setConfigSaveStatus(response.ok ? 'saved' : 'error');
+      })
+      .catch(() => {
+        setConfigSaveStatus('error');
+      })
+      .finally(() => {
+        const resetId = window.setTimeout(() => setConfigSaveStatus('idle'), 2000);
+        return () => window.clearTimeout(resetId);
+      });
+  }, [mode, activeToken, currentConfigPayload]);
+
   const normalizedProxyManifestUrl = normalizeManifestUrl(proxyManifestUrl);
   const canGenerateProxy = Boolean(
     normalizedProxyManifestUrl &&
@@ -2156,11 +2341,8 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
     tmdbKey.trim() &&
     mdblistKey.trim()
   );
-  const isConfigStringVisible = canGenerateConfig && showConfigString;
   const isProxyUrlVisible = Boolean(proxyUrl) && showProxyUrl;
   const proxyDisplayValue = proxyUrl || `${baseUrl || 'https://erdb.example.com'}/proxy/{config}/manifest.json`;
-  const displayedConfigString =
-    canGenerateConfig && !isConfigStringVisible ? maskSensitiveText(configString) : configString;
   const displayedProxyUrl = isProxyUrlVisible ? proxyDisplayValue : maskSensitiveText(proxyDisplayValue);
   const activeRatingStyle =
     previewType === 'poster'
@@ -2282,13 +2464,14 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
       thumbnailSize,
       qualityBadgesSide,
       posterQualityBadgesPosition,
-      configCopied,
       proxyCopied,
       copied,
       aiometadataCopiedType,
       aiometadataEpisodeProvider,
       proxySeriesMetadataProvider,
       proxyAiometadataProvider,
+      activeToken,
+      configSaveStatus,
     },
     derived: {
       baseUrl,
@@ -2298,11 +2481,8 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
       githubPackageVersion,
       repoUrl,
       previewNotice,
-      canGenerateConfig,
       canGenerateProxy,
-      isConfigStringVisible,
       isProxyUrlVisible,
-      displayedConfigString,
       displayedProxyUrl,
       styleLabel,
       textLabel,
@@ -2322,7 +2502,6 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
       handleExportConfig,
       handleImportFile,
       handleImportConfigString,
-      handleCopyConfig,
       handleCopyProxy,
       handleCopyPrompt,
       handleCopyAiometadataPattern,
@@ -2442,11 +2621,9 @@ export default function HomePage({ mode = 'landing' }: { mode?: HomePageMode }) 
       },
       toggleProxyEnabledType,
       toggleProxyTranslateMeta: () => setProxyTranslateMeta((value) => !value),
-      toggleConfigStringVisibility: () => {
-        if (!canGenerateConfig) return;
-        setShowConfigString((value) => !value);
-      },
       toggleProxyUrlVisibility: () => setShowProxyUrl((value) => !value),
+      handleTokenDisconnect,
+      handleSaveConfig,
     },
   };
 

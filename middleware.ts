@@ -1,9 +1,34 @@
+
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildContentSecurityPolicy } from './lib/contentSecurityPolicy';
 
 const createNonce = () => btoa(crypto.randomUUID().replace(/-/g, '')).replace(/=+$/g, '');
 
+const ALLOWED_RENDER_TYPES = new Set(['poster', 'backdrop', 'logo', 'thumbnail']);
+
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const parts = pathname.split('/').filter(Boolean);
+
+  // Handle Token-based URLs: /Tk-[token]/[type]/[id].jpg
+  if (parts.length >= 3 && parts[0].startsWith('Tk-')) {
+    const token = parts[0];
+    const type = parts[1];
+    
+    if (ALLOWED_RENDER_TYPES.has(type)) {
+      const idSegments = parts.slice(2);
+      const id = idSegments.join('/');
+      
+      const url = request.nextUrl.clone();
+      url.pathname = `/${type}/${id}`;
+      url.searchParams.set('token', token);
+      
+      // We don't return early here because we still want to apply CSP
+      // But we need to use a rewrite
+      return NextResponse.rewrite(url);
+    }
+  }
+
   const nonce = createNonce();
   const contentSecurityPolicy = buildContentSecurityPolicy({
     nonce,
