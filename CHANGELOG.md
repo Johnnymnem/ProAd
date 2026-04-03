@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.9](https://github.com/realbestia1/erdb/compare/v0.3.8...v0.3.9) - 2026-04-03
+
+- fix(poster): resolve clean poster logo/title fallback for regional locales ([50321e2](https://github.com/realbestia1/erdb/commit/50321e2cc8b418322174d5f16520bca232079537))
+  - fix TMDB translation fallback so regional locales resolve through a base-language chain like `it-IT -> it -> en`
+  - add a reusable fallback-chain helper for localized TMDB detail requests
+  - always include `include_image_language` for poster image/logo fetches
+  - improve clean poster logo selection so the chosen logo must actually match the requested language or its base language
+  - continue fallback lookup when the initially selected logo is present but not language-compatible
+  - update poster image fallback requests to use the same image-language constraints
+  - bump final image renderer cache version to `v62` to invalidate stale cached poster outputs
+  - bump project version from `0.3.8` to `0.3.9`
+
 ## [0.3.8](https://github.com/realbestia1/erdb/compare/v0.3.7...v0.3.8) - 2026-04-03
 
 - fix(poster): handle regional locale fallback for clean title overlay ([bd90a19](https://github.com/realbestia1/erdb/commit/bd90a196e4dd1becfd4ac21a96c6cfa7064a96da))
