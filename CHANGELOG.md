@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.4](https://github.com/realbestia1/erdb/compare/v0.3.3...v0.3.4) - 2026-04-03
+
+- Bump version to 0.3.4; fix thumbnail badge ([fe2e2a4](https://github.com/realbestia1/erdb/commit/fe2e2a448223a26f3345a273706a7d5178c8e049))
+  Update project version to 0.3.4 (package.json and UI reference) and adjust route image badge logic: only use thumbnailVerticalBadgeContent when the thumbnail rating layout is vertical, otherwise fall back to 'standard'. Also updated build metadata (tsconfig.tsbuildinfo).
+
 ## [0.3.3](https://github.com/realbestia1/erdb/compare/v0.3.2...v0.3.3) - 2026-04-03
 
 - Bump package to 0.3.3; fix backdrop badge layout ([2502917](https://github.com/realbestia1/erdb/commit/25029174080311ef786450d173321c955d386222))
