@@ -44,6 +44,7 @@ type HomePageViewState = {
   tmdbKey: string;
   mdblistKey: string;
   simklClientId: string;
+  fanartKey: string;
   proxyManifestUrl: string;
   proxyCatalogs: ProxyCatalogDescriptor[];
   proxyCatalogNames: Record<string, string>;
@@ -132,6 +133,7 @@ type HomePageViewActions = {
   setTmdbKey: Dispatch<SetStateAction<string>>;
   setMdblistKey: Dispatch<SetStateAction<string>>;
   setSimklClientId: Dispatch<SetStateAction<string>>;
+  setFanartKey: Dispatch<SetStateAction<string>>;
   setPosterRatingsLayout: Dispatch<SetStateAction<PosterRatingLayout>>;
   setPosterRatingsMaxPerSide: Dispatch<SetStateAction<number | null>>;
   setLogoRatingsMax: Dispatch<SetStateAction<number | null>>;

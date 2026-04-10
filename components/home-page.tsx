@@ -141,6 +141,7 @@ const POSTER_QUALITY_BADGE_POSITION_OPTIONS: Array<{
 const TMDB_KEY_STORAGE_KEY = 'erdb_tmdb_key';
 const MDBLIST_KEY_STORAGE_KEY = 'erdb_mdblist_key';
 const SIMKL_CLIENT_ID_STORAGE_KEY = 'erdb_simkl_client_id';
+const FANART_KEY_STORAGE_KEY = 'erdb_fanart_key';
 const ERDB_TOKEN_STORAGE_KEY = 'erdb_active_token';
 const PREVIEW_CONFIG_STORAGE_KEY = 'erdb_preview_config';
 const EXPORT_CONFIG_VERSION = 1;
@@ -341,6 +342,7 @@ const buildAiometadataPattern = (options: {
   tmdbKey: string;
   mdblistKey: string;
   simklClientId: string;
+  fanartKey: string;
   lang: string;
   posterLang: string;
   posterAnimeLang: string;
@@ -393,6 +395,7 @@ const buildAiometadataPattern = (options: {
     tmdbKey,
     mdblistKey,
     simklClientId,
+    fanartKey,
     lang,
     posterLang,
     posterAnimeLang,
@@ -458,6 +461,9 @@ const buildAiometadataPattern = (options: {
 
   if (simklClientId) {
     params.push(['simklClientId', simklClientId]);
+  }
+  if (fanartKey) {
+    params.push(['fanartKey', fanartKey]);
   }
 
   if (imageType === 'poster') {
@@ -608,6 +614,7 @@ const buildAiometadataPatternBlock = (options: {
   if (options.imageType !== 'thumbnail') {
     pushIfString('mdblistKey');
     pushIfString('simklClientId');
+    pushIfString('fanartKey');
     pushIfString('ratings');
     pushIfString('qualityBadgesSide');
     pushIfString('posterQualityBadgesPosition');
@@ -789,6 +796,7 @@ export default function HomePage({
   const [mdblistKey, setMdblistKey] = useState('');
   const [tmdbKey, setTmdbKey] = useState('');
   const [simklClientId, setSimklClientId] = useState('');
+  const [fanartKey, setFanartKey] = useState('');
   const [proxyManifestUrl, setProxyManifestUrl] = useState('');
   const [proxySeriesMetadataProvider, setProxySeriesMetadataProvider] =
     useState<ProxySeriesMetadataProvider>('tmdb');
@@ -811,7 +819,7 @@ export default function HomePage({
   const [showProxyUrl, setShowProxyUrl] = useState(false);
   const [aiometadataCopiedType, setAiometadataCopiedType] = useState<AiometadataPatternType | null>(null);
   const [aiometadataEpisodeProvider, setAiometadataEpisodeProvider] = useState<AiometadataEpisodeProvider>('realimdb');
-  const [currentVersion, setCurrentVersion] = useState('0.3.21');
+  const [currentVersion, setCurrentVersion] = useState('0.3.22');
   const [githubPackageVersion, setGithubPackageVersion] = useState<string | null>(null);
   const [repoUrl, setRepoUrl] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<'idle' | 'with' | 'without'>('idle');
@@ -963,6 +971,7 @@ export default function HomePage({
     const storedTmdbKey = safeLocalStorageGet(TMDB_KEY_STORAGE_KEY);
     const storedMdblistKey = safeLocalStorageGet(MDBLIST_KEY_STORAGE_KEY);
     const storedSimklClientId = safeLocalStorageGet(SIMKL_CLIENT_ID_STORAGE_KEY);
+    const storedFanartKey = safeLocalStorageGet(FANART_KEY_STORAGE_KEY);
     const storedToken = safeLocalStorageGet(ERDB_TOKEN_STORAGE_KEY);
     if (!storedTmdbKey && !storedMdblistKey && !storedSimklClientId && !storedToken) {
       isHydrated.current = true;
@@ -977,6 +986,9 @@ export default function HomePage({
       }
       if (storedSimklClientId) {
         setSimklClientId(storedSimklClientId);
+      }
+      if (storedFanartKey) {
+        setFanartKey(storedFanartKey);
       }
       if (!initialToken && storedToken) {
         setActiveToken(storedToken);
@@ -1021,6 +1033,15 @@ export default function HomePage({
       safeLocalStorageRemove(SIMKL_CLIENT_ID_STORAGE_KEY);
     }
   }, [simklClientId]);
+
+  useEffect(() => {
+    if (!isHydrated.current) return;
+    if (fanartKey) {
+      safeLocalStorageSet(FANART_KEY_STORAGE_KEY, fanartKey);
+    } else {
+      safeLocalStorageRemove(FANART_KEY_STORAGE_KEY);
+    }
+  }, [fanartKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1310,6 +1331,9 @@ export default function HomePage({
     if (simklClientId) {
       query.set('simklClientId', simklClientId);
     }
+    if (fanartKey) {
+      query.set('fanartKey', fanartKey);
+    }
     if (tmdbKey) {
       query.set('tmdbKey', tmdbKey);
     }
@@ -1412,6 +1436,7 @@ export default function HomePage({
     baseUrl,
     mdblistKey,
     simklClientId,
+    fanartKey,
     tmdbKey,
   ]);
 
@@ -1419,6 +1444,7 @@ export default function HomePage({
     const tmdb = tmdbKey.trim();
     const mdb = mdblistKey.trim();
     const simkl = simklClientId.trim();
+    const fanart = fanartKey.trim();
     if (!baseUrl || !tmdb || !mdb) {
       return '';
     }
@@ -1431,6 +1457,9 @@ export default function HomePage({
     };
     if (simkl) {
       config.simklClientId = simkl;
+    }
+    if (fanart) {
+      config.fanartKey = fanart;
     }
 
     const posterRatingsQuery = stringifyRatingPreferencesAllowEmpty(posterRatingPreferences);
@@ -1567,6 +1596,7 @@ export default function HomePage({
     tmdbKey,
     mdblistKey,
     simklClientId,
+    fanartKey,
     posterRatingPreferences,
     backdropRatingPreferences,
     thumbnailRatingPreferences,
@@ -2074,6 +2104,7 @@ export default function HomePage({
       payload.tmdbKey = tmdbKey;
       payload.mdblistKey = mdblistKey;
       payload.simklClientId = simklClientId;
+      payload.fanartKey = fanartKey;
     }
 
     const filename = includeKeys ? 'erdb-config-with-keys.json' : 'erdb-config.json';
@@ -2095,6 +2126,9 @@ export default function HomePage({
     }
     if (typeof payload.simklClientId === 'string') {
       setSimklClientId(payload.simklClientId);
+    }
+    if (typeof payload.fanartKey === 'string') {
+      setFanartKey(payload.fanartKey);
     }
     if (typeof payload.mediaId === 'string') {
       setMediaId(payload.mediaId);
@@ -2600,6 +2634,7 @@ export default function HomePage({
       tmdbKey,
       mdblistKey,
       simklClientId,
+      fanartKey,
     }),
     [
       effectiveLang,
@@ -2746,6 +2781,7 @@ export default function HomePage({
       tmdbKey,
       mdblistKey,
       simklClientId,
+      fanartKey,
     ]
   );
 
@@ -2893,6 +2929,7 @@ export default function HomePage({
       tmdbKey,
       mdblistKey,
       simklClientId,
+      fanartKey,
       proxyManifestUrl,
       proxyCatalogs,
       proxyCatalogNames: sanitizedProxyCatalogNames,
@@ -2979,6 +3016,7 @@ export default function HomePage({
       setTmdbKey,
       setMdblistKey,
       setSimklClientId,
+      setFanartKey,
       setPosterRatingsLayout,
       setPosterRatingsMaxPerSide,
       setLogoRatingsMax,

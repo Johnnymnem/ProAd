@@ -37,12 +37,14 @@ const ERDB_TYPE_OPTIONAL_PARAMS = {
   logo: ['logoRatings', 'logoRatingsMax', 'logoMode', 'logoFontVariant', 'logoPrimary', 'logoSecondary', 'logoOutline'],
   thumbnail: ['backdropStreamBadges', 'backdropQualityBadgesStyle', 'thumbnailRatings'],
 } as const;
+const ERDB_FANART_PARAMS = ['fanartKey'] as const;
 const ERDB_OPTIONAL_PARAM_KEYS = [
   ...ERDB_OPTIONAL_PARAMS,
   ...ERDB_TYPE_OPTIONAL_PARAMS.poster,
   ...ERDB_TYPE_OPTIONAL_PARAMS.backdrop,
   ...ERDB_TYPE_OPTIONAL_PARAMS.thumbnail,
   ...ERDB_TYPE_OPTIONAL_PARAMS.logo,
+  ...ERDB_FANART_PARAMS,
 ];
 
 const ERDB_TYPE_STYLE_PARAMS = {
@@ -105,6 +107,7 @@ export type ProxyConfig = {
   logoRatings?: string;
   logoRatingsMax?: string;
   logoMode?: string;
+  fanartKey?: string;
   logoFontVariant?: string;
   logoPrimary?: string;
   logoSecondary?: string;
@@ -164,6 +167,7 @@ const PROXY_OPTIONAL_STRING_KEYS = [
   'thumbnailRatings',
   'logoRatings',
   'logoRatingsMax',
+  'fanartKey',
   'logoMode',
   'logoFontVariant',
   'logoPrimary',

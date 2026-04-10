@@ -37,6 +37,7 @@ export function WorkspaceControlsPanel({ state, derived, actions }: WorkspaceCon
     tmdbKey,
     mdblistKey,
     simklClientId,
+    fanartKey,
     posterLang,
     posterAnimeLang,
     backdropLang,
@@ -83,6 +84,7 @@ export function WorkspaceControlsPanel({ state, derived, actions }: WorkspaceCon
     setTmdbKey,
     setMdblistKey,
     setSimklClientId,
+    setFanartKey,
     setPosterLang,
     setPosterAnimeLang,
     setBackdropLang,
@@ -176,6 +178,11 @@ export function WorkspaceControlsPanel({ state, derived, actions }: WorkspaceCon
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-slate-400">SIMKL Client ID</span>
               <input type="password" value={simklClientId} onChange={(e) => setSimklClientId(e.target.value)} placeholder="Optional Integration" className={INPUT_CLASS} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-slate-400">Fanart.tv API Key <span className="text-slate-500 font-normal">(optional)</span></span>
+              <span className="text-xs text-slate-500">Used as fallback for Clean posters/backdrops when TMDB has none. Not required.</span>
+              <input type="password" value={fanartKey} onChange={(e) => setFanartKey(e.target.value)} placeholder="Fanart.tv API key" className={INPUT_CLASS} />
             </label>
           </div>
         </div>

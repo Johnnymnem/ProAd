@@ -269,6 +269,7 @@ const SIMKL_CLIENT_ID =
   process.env.SIMKL_API_KEY ||
   process.env.ERDB_SIMKL_CLIENT_ID ||
   '';
+const FANART_API_KEY = process.env.FANART_API_KEY || process.env.ERDB_FANART_API_KEY || '';
 type TimedCacheEntry<T> = {
   value: T;
   expiresAt: number;
@@ -2630,6 +2631,59 @@ const pickBackdropByPreference = (
     alternativeBackdrops[0] ||
     fallbackOriginal
   );
+};
+
+const FANART_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+const fetchFanartImages = async (
+  tmdbId: string,
+  tvdbId: string | null,
+  mediaType: 'movie' | 'tv',
+  fanartKey: string,
+  phases: PhaseDurations
+): Promise<{ posters: string[]; backdrops: string[] }> => {
+  const empty = { posters: [], backdrops: [] };
+  if (!fanartKey) return empty;
+
+  try {
+    let fanartUrl: string;
+    let cacheKey: string;
+    if (mediaType === 'movie') {
+      fanartUrl = `https://webservice.fanart.tv/v3.2/movies/${tmdbId}?api_key=${fanartKey}`;
+      cacheKey = `fanart:movie:${tmdbId}`;
+    } else {
+      if (!tvdbId) return empty;
+      fanartUrl = `https://webservice.fanart.tv/v3.2/tv/${tvdbId}?api_key=${fanartKey}`;
+      cacheKey = `fanart:tv:${tvdbId}`;
+    }
+
+    const response = await fetchJsonCached(cacheKey, fanartUrl, FANART_CACHE_TTL_MS, phases, 'tmdb');
+    if (!response.ok || !response.data) return empty;
+
+    const data = response.data;
+    const rawPosters: any[] = mediaType === 'movie'
+      ? (Array.isArray(data.movieposter) ? data.movieposter : [])
+      : (Array.isArray(data.tvposter) ? data.tvposter : []);
+    const rawBackdrops: any[] = mediaType === 'movie'
+      ? (Array.isArray(data.moviebackground) ? data.moviebackground : [])
+      : (Array.isArray(data.showbackground) ? data.showbackground : []);
+
+    const byLikes = (a: any, b: any) => parseInt(b.likes || '0', 10) - parseInt(a.likes || '0', 10);
+
+    const sortedPosters = rawPosters
+      .filter((item: any) => typeof item?.url === 'string')
+      .sort(byLikes)
+      .map((item: any) => item.url as string);
+
+    const sortedBackdrops = rawBackdrops
+      .filter((item: any) => typeof item?.url === 'string')
+      .sort(byLikes)
+      .map((item: any) => item.url as string);
+
+    return { posters: sortedPosters, backdrops: sortedBackdrops };
+  } catch {
+    return empty;
+  }
 };
 
 type FastRenderInput = {
@@ -5990,6 +6044,10 @@ export async function GET(
     request.nextUrl.searchParams.get('simklClientId') ||
     request.nextUrl.searchParams.get('simkl_client_id') ||
     SIMKL_CLIENT_ID;
+  const fanartKey =
+    tokenConfig.fanartKey ||
+    request.nextUrl.searchParams.get('fanartKey') ||
+    FANART_API_KEY;
 
   const parts = cleanId.split(':');
   const idPrefix = (parts[0] || '').trim().toLowerCase();
@@ -6186,6 +6244,7 @@ export async function GET(
     effectiveRatingPreferences.join(',') || 'none',
     mdblistCacheSeed,
     simklCacheSeed,
+    fanartKey ? 'fanart' : 'no-fanart',
     tokenUpdatedAt.toString(),
   ].join('|');
   const objectStorageEnabled = isObjectStorageConfigured();
@@ -6955,6 +7014,7 @@ export async function GET(
         mdblistCacheSeed,
         simklCacheSeed,
         streamBadgesCacheKey,
+        fanartKey ? 'fanart' : 'no-fanart',
         'v1',
       ].join('|');
       const finalCacheHash = sha1Hex(finalImageCacheKey);
@@ -8278,6 +8338,45 @@ export async function GET(
               if (selectedLogoAspectRatio) {
                 outputWidth = getLogoCanvasWidth(selectedLogoAspectRatio);
               }
+            }
+          }
+        }
+
+        // Fanart.tv fallback: if TMDB has no textless image and preference is 'clean'/'alternative', try Fanart.tv
+        if (fanartKey && !useRawAnimeImageFallback && !imgUrl && imgPath && mediaType) {
+          const needsPosterFallback =
+            imageType === 'poster' &&
+            (effectivePosterTextPreference === 'clean' || effectivePosterTextPreference === 'alternative') &&
+            !selectedPosterIsTextless;
+          const needsBackdropFallback =
+            imageType === 'backdrop' &&
+            (effectiveBackdropTextPreference === 'clean' || effectiveBackdropTextPreference === 'alternative');
+
+          if (needsPosterFallback || needsBackdropFallback) {
+            const tvdbId = mediaType === 'tv'
+              ? (() => {
+                const rawTvdbId =
+                  localizedMediaDetails?.external_ids?.tvdb_id ??
+                  fallbackMediaDetails?.external_ids?.tvdb_id ??
+                  null;
+                if (typeof rawTvdbId === 'number' && Number.isFinite(rawTvdbId)) return String(rawTvdbId);
+                if (typeof rawTvdbId === 'string' && rawTvdbId.trim().length > 0) return rawTvdbId.trim();
+                return null;
+              })()
+              : null;
+
+            const fanartImages = await fetchFanartImages(
+              String(media.id),
+              tvdbId,
+              mediaType as 'movie' | 'tv',
+              fanartKey,
+              phases
+            );
+
+            if (needsPosterFallback && fanartImages.posters.length > 0) {
+              imgUrl = fanartImages.posters[0];
+            } else if (needsBackdropFallback && fanartImages.backdrops.length > 0) {
+              imgUrl = fanartImages.backdrops[0];
             }
           }
         }
